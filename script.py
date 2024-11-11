@@ -1,7 +1,8 @@
 
 
 def funcion1():
-    print("Hola")
+    print("Agur")
+
 
 
 funcion1()
