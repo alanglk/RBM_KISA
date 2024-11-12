@@ -2,6 +2,7 @@ import gzip
 
 class MNIST:
     """
+    https://yann.lecun.com/exdb/mnist/
     ubyte format of MNIST images:
         [offset] [type]          [value]          [description]
         0000     32 bit integer  0x00000803(2051) magic number
@@ -71,7 +72,7 @@ class MNIST:
         if hasattr(self, 'file') and not self.file.closed:
             self.file.close()
 
-def main():
+def test():
     # Read the 10 first images from the MNIST dataset
     dataset = MNIST("./data/t10k-images-idx3-ubyte.gz", 10)
 
@@ -92,5 +93,5 @@ def main():
     plt.show()
 
 if __name__ == "__main__":
-    main()
+    test()
     
