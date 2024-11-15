@@ -33,9 +33,11 @@ class RBM(ABC):
         b -> Hidden layer biases
     """
     
-    def __init__(self, visible_nodes, hidden_nodes):
+    def __init__(self, visible_nodes, hidden_nodes, k = 10):
         self.n_v = visible_nodes
         self.n_h = hidden_nodes
+
+        self.k = k # Number of gibbsampling steps to be performed
 
         # Initialize random weights from uniform distribution
         self.W = np.random.random((visible_nodes, hidden_nodes))
@@ -66,12 +68,18 @@ class RBM(ABC):
         p_v = sigmoid(aux)
         return p_v # Probability of v | h
     
-    def generate(self, v: np.ndarray) -> np.ndarray:
-        ph = self.forward(v)
-        h_ = np.random.binomial(p=ph, n = 1) # sample h
-        pv = self.backward(h_)
-        v_ = np.random.binomial(p=pv, n = 1) # sample v
-        return v_
+    def generate(self, v0: np.ndarray) -> np.ndarray:
+        """
+            Gibbsampling to generate output vk from v0 input
+        """
+        p_h0 = self.forward(v0) # compute hidden activation probs
+        for _ in range(self.k):
+            hk = np.random.binomial(p=p_h0, n = 1) # sample h 
+            p_vk = self.backward(hk)
+            vk = np.random.binomial(p=p_vk, n = 1) # sample v
+            vk[v0 < 0] = v0[v0 < 0]
+
+        return vk, p_h0
 
 
     @abstractmethod
@@ -96,8 +104,7 @@ class RBM_CD(RBM):
         Contrastive Divergence
     """
     def __init__(self, visible_nodes, hidden_nodes,  k = 10, learning_rate = 0.1):
-        super().__init__(visible_nodes, hidden_nodes)
-        self.k = k # steps of Gibbs Sampling
+        super().__init__(visible_nodes, hidden_nodes, k)
         self.lr = learning_rate
     
     def train(self, train_set):
@@ -105,14 +112,7 @@ class RBM_CD(RBM):
         train_loss = 0.0
         # k-step contrastive divergence
         for v0 in train_set:
-            p_h0 = self.forward(v0)
-
-            for _ in range(self.k):
-                hk = np.random.binomial(p=p_h0, n = 1) # sample h 
-                p_vk = self.backward(hk)
-                vk = np.random.binomial(p=p_vk, n = 1) # sample v
-                vk[v0 < 0] = v0[v0 < 0]
-            
+            vk, p_h0 = self.generate(v0) # Gibbsampling for self.k steps
             p_hk = self.forward(vk)
 
             # Update the parameters
@@ -157,8 +157,8 @@ def test_RBM_BASE():
     p_v = rbm.backward(p_h)
     print(f"rbm backward shape{p_v.shape} rbm backward out: \n{p_v}")
 
-    v_ = rbm.generate(v)
-    print(f"rbm generate process for v input: \n{v_}")
+    v_, _ = rbm.generate(v)
+    print(f"rbm generate process for v input and {rbm.k} gibbsampling steps: \n{v_}")
     
     # The goal is to reduce the divergence between the input probability
     # dsitribution and the output. 
@@ -187,18 +187,46 @@ def test_RBM_CD():
     print(f"Initial weights matrix ({rbm.W.shape}): \n{rbm.W}")
     
     rbm.train([v]) # Train with just one instance
+    
     print(f"Final weights matrix ({rbm.W.shape}): \n{rbm.W}")
 
-    v_ = rbm.generate(v)
-    print(f"rbm generate process for v after training: \n{v_}")
+    v_, _ = rbm.generate(v)
+    print(f"rbm generate process for v after training with {rbm.k} gibbsampling steps: \n{v_}")
 
     kld = kl_divergence(v.flatten() / np.sum(v.flatten()), v_.flatten() / np.sum(v_.flatten()))
     print(f"KL-Divergence between input and final RBM probability output: {kld}")
     print("===================================")
     print()
 
+def test_RBM_CD_training():
+    np.random.seed(42) # For reproducibility
+    
+    # Hyperparameters
+    data_size = 50
+    test_size = 0.2
 
+    # Generate synthetic data
+    # let's try to model a normal distribution using
+    # the implemented Contrastive Divergence RBM algorithm
+    x = np.linspace(-10, 10, num=data_size)
+    def normal(x,mu,sigma):
+        return ( 2.*np.pi*sigma**2. )**-.5 * np.exp( -.5 * (x-mu)**2. / sigma**2. )
+    y = normal(x, 0, 1) # sample x from normal distribution
+
+    data = np.vstack((x, y)).T # (x, y)
+    indexes = np.random.permutation(data.shape[0]) # mix the elements to generate train and test
+    test_count = int(test_size * data.shape[0])
+    test = data[indexes[:test_count]]   # Test set
+    train = data[indexes[test_count:]]  # Train set
+    
+
+    # The objective is to train the RBM with the xs and ys and then
+    # just give an x to generate the expected y
+    
+
+    pass
 
 if __name__ == "__main__":
     test_RBM_BASE()
     test_RBM_CD()
+    test_RBM_CD_training()

@@ -23,7 +23,7 @@ class MNIST:
                 - N: if not provided, all the images in the input file are read.
                     Else, N images are read.
         """
-
+        
         self.path = path
 
         # Open with gzip to uncompress the file
