@@ -1,0 +1,5 @@
+{
+    "python.defaultInterpreterPath": ".venv/bin/activate",
+    "python.analysis.extraPaths": [".venv/bin/activate"],
+    "python.terminal.activateEnvInCurrentTerminal": true,
+}

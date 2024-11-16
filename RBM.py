@@ -39,47 +39,63 @@ class RBM(ABC):
 
         self.k = k # Number of gibbsampling steps to be performed
 
-        # Initialize random weights from uniform distribution
-        self.W = np.random.random((visible_nodes, hidden_nodes))
-        self.a = np.random.random((1, visible_nodes))
-        self.b = np.random.random((1, hidden_nodes))
+        # Initialize random weights from uniform distribution (Xavier initialization)
+        limit = np.sqrt(6. / (self.n_v + self.n_h))
+        self.W = np.random.uniform(low=-limit, high=limit, size=(self.n_v, self.n_h))
+        self.a = np.random.uniform(low=-limit, high=limit, size=(1, self.n_v)) # np.zeros((1, visible_nodes))
+        self.b = np.random.uniform(low=-limit, high=limit, size=(1, self.n_h)) # np.zeros((1, hidden_nodes))
 
     def forward(self, v: np.ndarray) -> np.ndarray:
         """ 
-        Fordward propagation:
-        
-        Activation probability 
-            > P(hj = 1 | v) = S (bj + sum_i=1^m(Wi,j * vi) )
-                where S is the sigmoid function, v the visible layers set and h the hidden layers set
-            > P(h | v) = S( b + v @ W)
+            Fordward propagation:
+            
+            Activation probability 
+                > P(hj = 1 | v) = S (bj + sum_i=1^m(Wi,j * vi) )
+                    where S is the sigmoid function, v the visible layers set and h the hidden layers set
+                > P(h | v) = S( b + v @ W)
         """
-        aux = self.b + v @ self.W
-        p_h = sigmoid(aux)       
-        return p_h # Probability of h | v
+        # Probability of h | v
+        p_h = sigmoid(self.b + v @ self.W) 
+
+        # sample H
+        h = (np.random.uniform(0, 1, size=p_h.shape) < p_h).astype(np.int32)
+        return p_h, h
 
     def backward(self, h: np.ndarray) -> np.ndarray:
         """
-        Backward:
-        
-        Activation probability > P(vi = 1 | h) = S (ai + sum_j=1^m(Wi,j * hj) )
-            where S is the sigmoid function, v the visible layers set and h the hidden layers set
-        """
-        aux = self.a + h @ self.W.T
-        p_v = sigmoid(aux)
-        return p_v # Probability of v | h
-    
-    def generate(self, v0: np.ndarray) -> np.ndarray:
-        """
-            Gibbsampling to generate output vk from v0 input
-        """
-        p_h0 = self.forward(v0) # compute hidden activation probs
-        for _ in range(self.k):
-            hk = np.random.binomial(p=p_h0, n = 1) # sample h 
-            p_vk = self.backward(hk)
-            vk = np.random.binomial(p=p_vk, n = 1) # sample v
-            vk[v0 < 0] = v0[v0 < 0]
+            Backward:
 
-        return vk, p_h0
+            Activation probability > P(vi = 1 | h) = S (ai + sum_j=1^m(Wi,j * hj) )
+                where S is the sigmoid function, v the visible layers set and h the hidden layers set
+        """
+         
+        # Probability of v | h
+        p_v = sigmoid(self.a + h @ self.W.T)
+
+        # sample v
+        v = (np.random.uniform(0, 1, size=p_v.shape) < p_v).astype(np.int32) 
+        return p_v, v
+    
+    def gibbs_sampling(self, v):  
+        """
+            Perform Gibbsampling
+            OUTPUT:
+                (probability, samples) of visible units
+        """
+        vk = v.copy()
+        for i in range(self.k):
+            p_h, hk = self.forward(vk)
+            p_v, vk = self.backward(hk)
+        return vk, p_h
+    
+    def reconstruct(self, v0: np.ndarray) -> np.ndarray:
+        """
+            Gibbsampling step to reconstruct output vk from v0 input.
+            OUTPUT: generated visible layer output
+        """
+        p_h, hk = self.forward(v0)
+        p_v, vk = self.backward(hk)
+        return vk
 
 
     @abstractmethod
@@ -108,125 +124,36 @@ class RBM_CD(RBM):
         self.lr = learning_rate
     
     def train(self, train_set):
+        """
+            Train the RBM for one epoch using Contrastive Divergence
+        """
         train_size = len(train_set)
         train_loss = 0.0
+
         # k-step contrastive divergence
-        for v0 in train_set:
-            vk, p_h0 = self.generate(v0) # Gibbsampling for self.k steps
-            p_hk = self.forward(vk)
+        for i in range(train_size):
+            v0 = train_set[i]
+            v0 = v0.reshape(-1, 1).T
+            
+            p_h0, h = self.forward(v0)
+            positive_associations = np.dot(v0.T, p_h0)
+
+            vk, p_hk = self.gibbs_sampling(v0)
+            negative_associations = np.dot(vk.T, p_hk)
 
             # Update the parameters
             # W += lr * (possitive_associations - negative_associations)
             # possitive_associations = v • p_v
             # negative_associations = vk • p_vk
-            self.W += self.lr * ( np.dot(v0.T, p_h0) - np.dot(vk.T, p_hk) ) 
-            self.a += self.lr * np.sum(v0 - vk)
-            self.b += self.lr * np.sum(p_h0 - p_hk)
+            dW = positive_associations - negative_associations
+            self.W += self.lr * dW / train_size
+            self.a += self.lr * np.mean(v0 - vk, axis=0)
+            self.b += self.lr * np.mean(p_h0 - p_hk, axis=0)
 
             # Compute loss for the instance
             # Those that initially where active minus those generated that shoul be active
-            train_loss += np.mean(np.abs(v0[v0 >= 0] - vk[v0 >= 0])) 
+            # train_loss += np.mean(np.abs(v0[v0 >= 0] - vk[v0 >= 0])) 
+            train_loss += np.mean((v0 - vk)**2) # MSE
+
         return train_loss / train_size
-
-
-def test_RBM_BASE():
-    np.random.seed(42) # For reproducibility
     
-    # Example data input
-    v = np.array([[1, 0.001, 0.001, 1]])
-
-    # Instantiate the RBM test object
-    class RBM_BASE(RBM):
-        def __init__(self, visible_nodes, hidden_nodes):
-            super().__init__(visible_nodes, hidden_nodes)
-        def train():
-            # Train not implemented for just testing 
-            # the vissible and hidden layers
-            pass
-    rbm = RBM_BASE(4, 2)
-    p_h = rbm.forward(v)
-
-    print("RBM BASE TEST")
-    print(f"Test input shape: {v.shape} Test input: \n{v}")
-    print(f"rbm visible nodes: {rbm.n_v} hidden nodes: {rbm.n_v}")
-    print(f"rbm.a biasses shape: {rbm.a.shape} rbm.a biasses: \n{rbm.a}")
-    print(f"rbm.b biasses shape: {rbm.b.shape} rbm.b biasses: \n{rbm.b}")
-    print(f"rbm.W weights shape: {rbm.W.shape} rbm.W weights: \n{rbm.W}")
-    print(f"rbm forward shape{p_h.shape} rbm forward out: \n{p_h}")
-
-    p_v = rbm.backward(p_h)
-    print(f"rbm backward shape{p_v.shape} rbm backward out: \n{p_v}")
-
-    v_, _ = rbm.generate(v)
-    print(f"rbm generate process for v input and {rbm.k} gibbsampling steps: \n{v_}")
-    
-    # The goal is to reduce the divergence between the input probability
-    # dsitribution and the output. 
-    # v = np.array([1, 0.001, 0.001, 1])
-    # v_ = np.array([1, 1, 1, 1])
-    # kld = 0.98860 >> 0 -> significant divergence
-    kld = kl_divergence(v.flatten() / np.sum(v.flatten()), v_.flatten() / np.sum(v_.flatten()))
-    print(f"KL-Divergence between input and final RBM probability output: {kld}")
-    print("===================================")
-    print()
-
-def test_RBM_CD():
-    np.random.seed(42) # For reproducibility
-    
-    # Example data batch (size 1 instance)
-    v = np.array([[1, 0.001, 0.001, 1]])
-
-    # Instantiate the RBM
-    rbm = RBM_CD(4, 2, k=10, learning_rate=0.5)
-
-    # Test
-    print("RBM CD TEST")
-    print(f"Test input shape: {v.shape} Test input: \n{v}")
-    print(f"rbm visible nodes: {rbm.n_v} hidden nodes: {rbm.n_v}")
-    print(f"rbm k-step: {rbm.k} rbm learning rate: {rbm.lr}")
-    print(f"Initial weights matrix ({rbm.W.shape}): \n{rbm.W}")
-    
-    rbm.train([v]) # Train with just one instance
-    
-    print(f"Final weights matrix ({rbm.W.shape}): \n{rbm.W}")
-
-    v_, _ = rbm.generate(v)
-    print(f"rbm generate process for v after training with {rbm.k} gibbsampling steps: \n{v_}")
-
-    kld = kl_divergence(v.flatten() / np.sum(v.flatten()), v_.flatten() / np.sum(v_.flatten()))
-    print(f"KL-Divergence between input and final RBM probability output: {kld}")
-    print("===================================")
-    print()
-
-def test_RBM_CD_training():
-    np.random.seed(42) # For reproducibility
-    
-    # Hyperparameters
-    data_size = 50
-    test_size = 0.2
-
-    # Generate synthetic data
-    # let's try to model a normal distribution using
-    # the implemented Contrastive Divergence RBM algorithm
-    x = np.linspace(-10, 10, num=data_size)
-    def normal(x,mu,sigma):
-        return ( 2.*np.pi*sigma**2. )**-.5 * np.exp( -.5 * (x-mu)**2. / sigma**2. )
-    y = normal(x, 0, 1) # sample x from normal distribution
-
-    data = np.vstack((x, y)).T # (x, y)
-    indexes = np.random.permutation(data.shape[0]) # mix the elements to generate train and test
-    test_count = int(test_size * data.shape[0])
-    test = data[indexes[:test_count]]   # Test set
-    train = data[indexes[test_count:]]  # Train set
-    
-
-    # The objective is to train the RBM with the xs and ys and then
-    # just give an x to generate the expected y
-    
-
-    pass
-
-if __name__ == "__main__":
-    test_RBM_BASE()
-    test_RBM_CD()
-    test_RBM_CD_training()
