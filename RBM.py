@@ -30,7 +30,7 @@ class RBM(ABC):
             1. https://leftasexercise.com/2018/04/09/restricted-boltzmann-machines/
             2. https://leftasexercise.com/2018/04/13/learning-algorithms-for-restricted-boltzmann-machines-contrastive-divergence/
             3. https://leftasexercise.com/2018/04/20/training-restricted-boltzmann-machines-with-persistent-contrastive-divergence/ 
-
+            4. https://christian-igel.github.io/paper/TRBMAI.pdf
     """
     def __init__(self, visible_nodes, hidden_nodes, k: int = 1) -> None:
         """
