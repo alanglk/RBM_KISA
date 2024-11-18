@@ -3,6 +3,10 @@ import numpy as np
 from RBM import * 
 from datasets import *
 
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+
+
 def test_RBM_BASE():
     np.random.seed(42) # For reproducibility
     
@@ -15,12 +19,12 @@ def test_RBM_BASE():
     class RBM_BASE(RBM):
         def __init__(self, visible_nodes, hidden_nodes):
             super().__init__(visible_nodes, hidden_nodes)
-        def train():
+        def fit():
             # Train not implemented for just testing 
             # the vissible and hidden layers
             pass
     rbm = RBM_BASE(4, 2)
-    p_h, h = rbm.forward(v)
+    p_h, h = rbm._forward(v)
 
     print("RBM BASE TEST")
     print(f"Test input shape: {v.shape} Test input: \n{v}")
@@ -30,7 +34,7 @@ def test_RBM_BASE():
     print(f"rbm.W weights shape: {rbm.W.shape} rbm.W weights: \n{rbm.W}")
     print(f"rbm forward shape{p_h.shape} rbm forward out: \n{p_h}")
 
-    p_v, v = rbm.backward(p_h)
+    p_v, v = rbm._backward(p_h)
     print(f"rbm backward shape{p_v.shape} rbm backward out: \n{p_v}")
 
     v_ = rbm.reconstruct(v)
@@ -51,22 +55,22 @@ def test_RBM_CD():
     
     # Example data batch (size 1 instance)
     v = np.array([[0, 1, 0, 1]])
-    epochs = 50
-
+    epochs = 10
+    learning_rate = 0.01
+    
     # Instantiate the RBM
-    rbm = RBM_CD(4, 2, k=10, learning_rate=0.01)
+    rbm = RBM_CD(4, 2, k=10)
 
     # Test
     print("RBM CD TEST")
     print(f"Test input shape: {v.shape} Test input: \n{v}")
     print(f"Num epochs: {epochs}")
     print(f"rbm visible nodes: {rbm.n_v} hidden nodes: {rbm.n_v}")
-    print(f"rbm k-step: {rbm.k} rbm learning rate: {rbm.lr}")
+    print(f"rbm k-step: {rbm.k} rbm learning rate: {learning_rate}")
     print(f"Initial weights matrix ({rbm.W.shape}): \n{rbm.W}")
 
-    for e in range(epochs):
-        train_loss = rbm.train(v) # Train
-        print(f"Epoch {e+1}/{epochs}, Train loss (MSE): {train_loss}")
+    
+    rbm.fit(v, epochs=epochs, batch_dim=1, lr=learning_rate)
     
     print(f"Final weights matrix ({rbm.W.shape}): \n{rbm.W}")
 
@@ -100,45 +104,38 @@ def test_RBM_CD_function():
     # Generate synthetic data
     def function(x):
         return x ** 3
-    x = np.linspace(-1, 1, num=data_size)
-    #x_features = np.column_stack([x, np.sin(np.pi * x), np.cos(np.pi * x)]) # Expand dimensions of X
-    y = function(x) # create real ys
-    data = np.column_stack((x, y))
-    data = data.reshape(data_size, 1, data.shape[1]) # (N, 1, d) where N is the number of samples and d the dimension of each sample
+    X = np.linspace(-1, 1, num=data_size)
+    Y = function(X) # create real ys
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
+    train   = np.column_stack(X_train, Y_train)
+    test    = np.column_stack(X_test, Y_test)
     
-    train_set, test_set = random_train_test_split(data, test_size=test_size)
-    train_set, dev_set = random_train_test_split(data, test_size=test_size)
-
     # Instantiate RBM CD object
-    rbm = RBM_CD(data.shape[2], hidden_nodes, k_gibbs_steps, learning_rate)
+    rbm = RBM_CD(X_train.shape[1], hidden_nodes, k = k_gibbs_steps)
 
     # Test
     print("RBM CD FUNCTION APROXIMATION TEST")
-    print(f"Train set size: {len(train_set)}\tshape: {train_set.shape}\tshowing 5 first instances:\n{train_set[:5, :]}")
-    print(f"Dev set size:   {len(dev_set)  }\tshape: {dev_set.shape  }\tshowing 5 first instances:\n{dev_set[:5, :]  }")
-    print(f"Test set size:  {len(test_set) }\tshape: {test_set.shape }\tshowing 5 first instances:\n{test_set[:5, :] }")
+    print(f"Train set size: {train.shape[0]}\tshape: {train.shape}")
+    print(f"Test set size:  {test.shape[0]} \tshape: {test.shape }")
     print(f"rbm visible nodes: {rbm.n_v} hidden nodes: {rbm.n_v}")
     print(f"rbm.a biasses shape: {rbm.a.shape} rbm.a biasses: \n{rbm.a}")
     print(f"rbm.b biasses shape: {rbm.b.shape} rbm.b biasses: \n{rbm.b}")
     print(f"rbm.W weights shape: {rbm.W.shape} rbm.W weights: \n{rbm.W}")
 
-    for e in range(epochs):
-        # Train process
-        train_loss = rbm.train(train_set)
-
-        # Evaluation process
-        kls = []
-        dev_loss = 0.0
-        for v in dev_set:
-            v_, _ = rbm.generate(v)
-            dev_loss += np.mean(np.abs(v[v >= 0] - v_[v >= 0])) 
-            kl = kl_divergence(v.flatten() / np.sum(v.flatten()), v_.flatten() / np.sum(v_.flatten()))
-            kls.append(kl)
-            
-        dev_loss /= len(dev_set)
-        dev_divergence = sum(kls) / len(kls) 
-
-        print(f"Epoch {e+1}/{epochs},\tTrain loss: {train_loss},\tDev loss: {dev_loss},\tDev KL-Divergence: {dev_divergence}")
+    rbm.fit(train, epochs=epochs, batch_dim=1, lr=learning_rate)
+    
+    
+    # Evaluation process
+    kls = []
+    dev_loss = 0.0
+    for v in test:
+        v_, _ = rbm.generate(v)
+        dev_loss += np.mean(np.abs(v[v >= 0] - v_[v >= 0])) 
+        kl = kl_divergence(v.flatten() / np.sum(v.flatten()), v_.flatten() / np.sum(v_.flatten()))
+        kls.append(kl)    
+        dev_loss /= test.shape[0]
+    dev_divergence = sum(kls) / len(kls)
+    print(f"Dev loss: {dev_loss},\tDev KL-Divergence: {dev_divergence}")
 
     print(f"Final rbm.a biasses: \n{rbm.a}")
     print(f"Final rbm.b biasses: \n{rbm.b}")
@@ -156,7 +153,6 @@ def test_RBM_CD_function():
 
     print(reconstructed)
     # Show the original and reconstrucion on a figure
-    import matplotlib.pyplot as plt
     plt.plot(x, y, color = "blue", label="Groundtruth: y = x³")
     plt.plot(reconstructed[:, 0], reconstructed[:, 1], color="red", label="RBM ys reconstructed")
     plt.legend()
@@ -175,9 +171,10 @@ def test_RBM_CD_XOR():
         inputs/output of the XOR gate and then we will try to give
         the RBM just some input and check if it is correct or not 
     """
-
+    np.random.seed(42) # For reproducibility
+    
     # Hyperparameters
-    k_gibbs_steps   = 100
+    k_gibbs_steps   = 5
     learning_rate   = 0.0001
     hidden_nodes    = 2     # Number of visible nodes are the input shape
     epochs          = 10    # Number of epochs
@@ -192,7 +189,7 @@ def test_RBM_CD_XOR():
 
 
     # Instantiate the RBM object
-    rbm = RBM_CD(xor_logic.shape[2], hidden_nodes, k=k_gibbs_steps, learning_rate=learning_rate)
+    rbm = RBM_CD(xor_logic.shape[1], hidden_nodes, k=k_gibbs_steps)
 
     # Test
     print("RBM CD FUNCTION APROXIMATION TEST")
@@ -202,33 +199,30 @@ def test_RBM_CD_XOR():
     print(f"rbm.b biasses shape: {rbm.b.shape} rbm.b biasses: \n{rbm.b}")
     print(f"rbm.W weights shape: {rbm.W.shape} rbm.W weights: \n{rbm.W}")
 
-    for e in range(epochs):
-        # Train process
-        train_loss = rbm.train(xor_logic)
-        print(f"Epoch {e+1}/{epochs},\tTrain loss: {train_loss}")
+    rbm.fit(xor_logic, epochs=epochs, batch_dim=1, lr=learning_rate)
 
     print(f"Final rbm.a biasses: \n{rbm.a}")
     print(f"Final rbm.b biasses: \n{rbm.b}")
     print(f"Final rbm.W weights: \n{rbm.W}")
 
 
-
     # Plot the results with matplotlib
-    import matplotlib.pyplot as plt
     grt_color_map = { 0: "blue", 1: "red" } # Ground_truth color map
     rbm_color_map = { 0: "blue", 1: "red" } # RBM prediction color map
 
     # Ground truth
-    grt_xor_0 = xor_logic[xor_logic[:, :, 2] == 0]
-    grt_xor_1 = xor_logic[xor_logic[:, :, 2] == 1]
-    plt.scatter(grt_xor_0[:, 0], grt_xor_0[:, 1], s = 100, color = grt_color_map[0], label = "grt y = 0")
-    plt.scatter(grt_xor_1[:, 0], grt_xor_1[:, 1], s = 100, color = grt_color_map[1], label = "grt y = 1")
+    grt_xor_0 = xor_logic[xor_logic[:, 2] == 0]
+    grt_xor_1 = xor_logic[xor_logic[:, 2] == 1]
+    plt.scatter(grt_xor_0[:, 0], grt_xor_0[:, 1], s = 100, color = grt_color_map[0], label = "grt y = 0", )
+    plt.scatter(grt_xor_1[:, 0], grt_xor_1[:, 1], s = 100, color = grt_color_map[1], label = "grt y = 1", )
     
     # Recontruction
     v = np.array([[1, 1, 0]]) # This is not possible for XOR function
     v_ = rbm.reconstruct(v)
     print(f"Impossible inut: {v}") 
     print(f"Reconstructed output: {v_}")
+    plt.scatter(v[:, 0], v[:, 1], s = 150, color = "black", label = "Impossible for XOR", alpha=0.6)
+    plt.scatter(v_[:, 0], v_[:, 1], s = 150, color = "green", label = "Reconstructed by RBM", alpha=0.6)
 
     # Show
     plt.xlabel("x1")
@@ -238,65 +232,68 @@ def test_RBM_CD_XOR():
     plt.legend()
     plt.show()
 
+    print("===================================")
+    print()
+
 def test_RBM_CD_MNIST_Reconstruction():
-    """
-        The idea is to train an RBM with the MNIST dataset
-        for comparing the real and reconstructed results of
-        some images.
-    """
+    np.random.seed(42) # For reproducibility
+    
     # Hyperparameters
-    data_size       = 1000
-    k_gibbs_steps   = 1
-    learning_rate   = 0.001
-    hidden_nodes    = 30   # Number of visible nodes are the input shape
-    epochs          = 30    # Number of epochs
-
+    test_size     = 0.1
+    batch_size    = 64
+    learning_rate = 0.01
+    hidden_nodes  = 30    # Number of visible nodes are the input shape
+    epochs        = 100    # Number of epochs
+    
     # Load some instances of the dataset
-    dataset = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz", data_size)
+    dataset = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
     X, Y = dataset.to_numpy()
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
 
-    # Instantiate the RBM object
-    rbm = RBM_CD(X.shape[1], hidden_nodes, k=k_gibbs_steps, learning_rate=learning_rate)
+    # Initialize RBM with 30 hidden units
+    rbm = RBM_CD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes)
 
     # Test
     print("RBM CD MNIST RECONSTRUCTION TEST")
-    print(f"MNIST X shape: {X.shape}\t MNIST Y shape:\n{Y.shape}")
-    print(f"rbm visible nodes: {rbm.n_v} hidden nodes: {rbm.n_v}")
-    print(f"rbm.a biasses shape: {rbm.a.shape}")
-    print(f"rbm.b biasses shape: {rbm.b.shape}")
-    print(f"rbm.W weights shape: {rbm.W.shape}")
+    print(f"Hyperparameters:")
+    print(f"\tX_train instances: {X_train.shape[0]}\tX_test instances: {X_test.shape[0]}")
+    print(f"\tbatch size: {batch_size}\tepochs: {epochs}\tlearning rate: {learning_rate}")
+    print(f"\tvisible nodes: {X_train.shape[1]}\thidden nodes:{hidden_nodes}")
+    print(f"Training:")
+    rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate)
+    
+    # reconstruction
+    digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]
+    resticted_set = X_test[digit_indices]
 
-    # train
-    for e in range(epochs):
-        train_loss = rbm.train(X)
-        print(f"Epoch {e+1}/{epochs},\tTrain loss: {train_loss}")   
+    reconstructed = rbm.reconstruct(resticted_set)
 
-    # test reconstruction
-    import matplotlib.pyplot as plt
-    digit_indices = [np.where(Y == i) for i in range(10)]
-    f, axes = plt.subplots(2, len(digit_indices), figsize=(10, 2))
-    for i, indices in enumerate(digit_indices):
-        index = indices[0][0]
-        v = X[index]
-        y = Y[index]
+    # show 10 sample images
+    rows = 2
+    columns = 10
 
-        v_ = rbm.reconstruct(v)
-        axes[0, i].imshow(v.reshape(28, 28))
-        axes[0, i].set_title(y)
-        axes[1, i].imshow(v_.reshape(28, 28))
-        axes[1, i].set_title(y)
-    plt.axis('off')
+    fig, axes = plt.subplots(rows, columns,sharey = True,figsize=(30, 6))
+    for i in range(rows):
+        for j in range(columns):
+            if i==0:
+              axes[i, j].imshow(resticted_set[j].reshape(28, 28))
+            else:
+              axes[i, j].imshow(reconstructed[j].reshape(28, 28))
+
+            axes[i, j].tick_params(left = False, right = False , labelleft = False,
+                    labelbottom = False, bottom = False)
+
+    axes[0, 0].set_ylabel("ACTUAL", fontsize=12)
+    axes[1, 0].set_ylabel("REC.", fontsize=12)
     plt.show()
-        
 
     print("===================================")
     print()
 
 
-
 if __name__ == "__main__":
-    # test_RBM_BASE()
-    # test_RBM_CD()
+    test_RBM_BASE()
+    test_RBM_CD()
     # test_RBM_CD_function() # Doesn't work
-    # test_RBM_CD_XOR()
+    test_RBM_CD_XOR()
     test_RBM_CD_MNIST_Reconstruction()
