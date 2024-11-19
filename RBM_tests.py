@@ -241,7 +241,7 @@ def test_RBM_CD_MNIST_Reconstruction():
     # Hyperparameters
     test_size     = 0.1
     batch_size    = 64
-    learning_rate = 0.01
+    learning_rate = 0.1
     hidden_nodes  = 30    # Number of visible nodes are the input shape
     epochs        = 100    # Number of epochs
     
@@ -290,10 +290,66 @@ def test_RBM_CD_MNIST_Reconstruction():
     print("===================================")
     print()
 
+def test_RBM_PCD_MNIST_Reconstruction():
+    np.random.seed(42) # For reproducibility
+    
+    # Hyperparameters
+    test_size     = 0.1
+    batch_size    = 64
+    learning_rate = 0.01
+    hidden_nodes  = 30    # Number of visible nodes are the input shape
+    epochs        = 100    # Number of epochs
+    
+    # Load some instances of the dataset
+    dataset = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
+    X, Y = dataset.to_numpy()
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
+
+    # Initialize RBM with 30 hidden units
+    rbm = RBM_PCD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes, k= 2)
+
+    # Test
+    print("RBM CD MNIST RECONSTRUCTION TEST")
+    print(f"Hyperparameters:")
+    print(f"\tX_train instances: {X_train.shape[0]}\tX_test instances: {X_test.shape[0]}")
+    print(f"\tbatch size: {batch_size}\tepochs: {epochs}\tlearning rate: {learning_rate}")
+    print(f"\tvisible nodes: {X_train.shape[1]}\thidden nodes:{hidden_nodes}")
+    print(f"Training:")
+    rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate, weight_decay=None)
+
+    # reconstruction
+    digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]
+    resticted_set = X_test[digit_indices]
+
+    reconstructed = rbm.reconstruct(resticted_set)
+
+    # show 10 sample images
+    rows = 2
+    columns = 10
+
+    fig, axes = plt.subplots(rows, columns,sharey = True,figsize=(30, 6))
+    for i in range(rows):
+        for j in range(columns):
+            if i==0:
+              axes[i, j].imshow(resticted_set[j].reshape(28, 28))
+            else:
+              axes[i, j].imshow(reconstructed[j].reshape(28, 28))
+
+            axes[i, j].tick_params(left = False, right = False , labelleft = False,
+                    labelbottom = False, bottom = False)
+
+    axes[0, 0].set_ylabel("ACTUAL", fontsize=12)
+    axes[1, 0].set_ylabel("REC.", fontsize=12)
+    plt.show()
+
+    print("===================================")
+    print()
 
 if __name__ == "__main__":
-    test_RBM_BASE()
-    test_RBM_CD()
-    # test_RBM_CD_function() # Doesn't work
-    test_RBM_CD_XOR()
-    test_RBM_CD_MNIST_Reconstruction()
+    # test_RBM_BASE()
+    # test_RBM_CD()
+    # # test_RBM_CD_function() # Doesn't work
+    # test_RBM_CD_XOR()
+    # test_RBM_CD_MNIST_Reconstruction()
+
+    test_RBM_PCD_MNIST_Reconstruction()

@@ -145,8 +145,8 @@ class RBM_CD(RBM):
         # possitive_associations = v • p_v
         # negative_associations = vk • p_vk
         self.W += lr * (possitive_association - negative_association) / batch_size
-        self.a = np.mean(v - v_, axis=0)
-        self.b = np.mean(h_p - h_p_, axis=0)
+        self.a += lr * np.mean(v - v_, axis=0)
+        self.b += lr * np.mean(h_p - h_p_, axis=0)
         
         #Compute loss for the instance
         error = np.sum((v - v_)**2) / batch_size
@@ -170,3 +170,62 @@ class RBM_CD(RBM):
             train_error /= len(batches)
             print(f"epoch: {epoch}/{epochs} \t{'error:'} {train_error}")
 
+
+
+class RBM_PCD(RBM):
+    def __init__(self, visible_nodes, hidden_nodes, k: int = 2) -> None:
+        super().__init__(visible_nodes, hidden_nodes, k)
+        self.current_step = 0 # For learning rate decay
+
+        # Initialize the visible persistent values
+        self.visible_persistent = np.random.uniform(low=0, high=1, size=(1, self.n_v))   
+    
+    def _persistent_contrastive_divergence(self, batch, batch_size, lr, weight_decay):
+        """
+            K-Step Parallel Tempering Algorithm
+        """
+        
+        v = batch
+        v_persistent = self.visible_persistent
+
+        h_p, _= self._forward(v)
+        _, _, _, v_persistent_ = self._gibbsampling(v_persistent)
+        h_p_persistent_, _ = self._forward(v_persistent_)
+
+        possitive_association = np.dot(v.T, h_p)
+        negative_association = np.dot(v_persistent_.T, h_p_persistent_)
+        
+        # Update the parameters
+        self.W += lr * (possitive_association - negative_association) / batch_size # - weight_decay * self.W / batch_size
+        self.a += lr * np.mean(v - v_persistent_, axis=0)
+        self.b += lr * np.mean(h_p - h_p_persistent_, axis=0)
+        self.visible_persistent = v_persistent_
+
+        #Compute loss for the instance
+        error = np.sum((v - self.visible_persistent)**2) / batch_size
+        return error
+
+    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.01, weight_decay = 0.0001):
+        """
+            Train the RBM using Persistent Contrastive Divergence
+        """
+        self.current_step = 0 # lr linear decay
+
+        for epoch in range(epochs):
+            train_error = 0.0
+            train_num = X.shape[0]
+            batches = list(gen_batches(train_num, batch_dim))
+            for batch in batches:
+                batch = X[batch.start:batch.stop]
+                batch_size = batch.shape[0]
+                
+                # Linear learning rate decay
+                learning_rate = lr
+                # learning_rate = lr *(1 - self.current_step / batch_size * epochs)
+                # self.current_step += 1
+
+                error = self._persistent_contrastive_divergence(batch, batch_size, learning_rate, weight_decay)
+                train_error += error
+           
+            train_error /= len(batches)
+            print(f"epoch: {epoch}/{epochs} \t{'error:'} {train_error}")
