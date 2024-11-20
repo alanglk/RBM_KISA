@@ -239,19 +239,21 @@ def test_RBM_CD_MNIST_Reconstruction():
     np.random.seed(42) # For reproducibility
     
     # Hyperparameters
-    test_size     = 0.1
+    k = 1
     batch_size    = 64
     learning_rate = 0.1
-    hidden_nodes  = 30    # Number of visible nodes are the input shape
-    epochs        = 100    # Number of epochs
+    hidden_nodes  = 30      # Number of visible nodes are the input shape
+    epochs        = 100     # Number of epochs
     
     # Load some instances of the dataset
-    dataset = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
-    X, Y = dataset.to_numpy()
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
+    dataset_train       = MNIST("./data/train-images-idx3-ubyte.gz", "./data/train-labels-idx1-ubyte.gz")
+    dataset_test        = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
+    X_train, Y_train    = dataset_train.to_numpy()
+    X_test, Y_test      = dataset_test.to_numpy()
+    # X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
 
     # Initialize RBM with 30 hidden units
-    rbm = RBM_CD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes)
+    rbm = RBM_CD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes, k=k)
 
     # Test
     print("RBM CD MNIST RECONSTRUCTION TEST")
@@ -261,7 +263,8 @@ def test_RBM_CD_MNIST_Reconstruction():
     print(f"\tvisible nodes: {X_train.shape[1]}\thidden nodes:{hidden_nodes}")
     print(f"Training:")
     rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate)
-    
+    rbm.save(f"./models/RBM_CD_e{epochs}_bt{batch_size}_lr{learning_rate}_hn{hidden_nodes}_k{k}.pt")
+
     # reconstruction
     digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]
     resticted_set = X_test[digit_indices]
@@ -294,19 +297,21 @@ def test_RBM_PCD_MNIST_Reconstruction():
     np.random.seed(42) # For reproducibility
     
     # Hyperparameters
-    test_size     = 0.1
+    k = 1
     batch_size    = 64
     learning_rate = 0.1
-    hidden_nodes  = 30    # Number of visible nodes are the input shape
-    epochs        = 100    # Number of epochs
+    hidden_nodes  = 30      # Number of visible nodes are the input shape
+    epochs        = 100     # Number of epochs
     
     # Load some instances of the dataset
-    dataset = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
-    X, Y = dataset.to_numpy()
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
+    dataset_train       = MNIST("./data/train-images-idx3-ubyte.gz", "./data/train-labels-idx1-ubyte.gz")
+    dataset_test        = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
+    X_train, Y_train    = dataset_train.to_numpy()
+    X_test, Y_test      = dataset_test.to_numpy()
+    #X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
 
     # Initialize RBM with 30 hidden units
-    rbm = RBM_PCD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes, batch_size=batch_size, k= 2)
+    rbm = RBM_PCD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes, batch_size=batch_size, k= k)
 
     # Test
     print("RBM PCD MNIST RECONSTRUCTION TEST")
@@ -316,6 +321,8 @@ def test_RBM_PCD_MNIST_Reconstruction():
     print(f"\tvisible nodes: {X_train.shape[1]}\thidden nodes:{hidden_nodes}")
     print(f"Training:")
     rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate)
+    rbm.save(f"./models/RBM_PCD_e{epochs}_bt{batch_size}_lr{learning_rate}_hn{hidden_nodes}_k{k}.pt")
+
 
     # reconstruction
     digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]
@@ -350,5 +357,5 @@ if __name__ == "__main__":
     # test_RBM_CD()
     # # test_RBM_CD_function() # Doesn't work
     # test_RBM_CD_XOR()
-    #test_RBM_CD_MNIST_Reconstruction()
-    test_RBM_PCD_MNIST_Reconstruction()
+    test_RBM_CD_MNIST_Reconstruction()
+    #test_RBM_PCD_MNIST_Reconstruction()

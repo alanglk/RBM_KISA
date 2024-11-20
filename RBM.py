@@ -3,6 +3,9 @@ from sklearn.utils import gen_batches
 
 from abc import ABC, abstractmethod
 
+import pickle
+import os
+
 def sigmoid(z):
     return 1/(1 + np.exp(-z))
 
@@ -32,28 +35,56 @@ class RBM(ABC):
             3. https://leftasexercise.com/2018/04/20/training-restricted-boltzmann-machines-with-persistent-contrastive-divergence/ 
             4. https://christian-igel.github.io/paper/TRBMAI.pdf
     """
-    def __init__(self, visible_nodes, hidden_nodes, k: int = 1) -> None:
+    def __init__(self, visible_nodes, hidden_nodes, k: int = 1, pretrained: str = None) -> None:
         """
             n_v: number of visible nodes
             n_h: number of hidden nodes
             k -> Number of gibbsampling steps to be performed    
+            pretrained: path of a rbm model checkpoint to load
 
             W -> Network weights
             a -> Visible layer biases
             b -> Hidden layer biases
         """
         
-        self.n_v = visible_nodes
-        self.n_h = hidden_nodes
-        self.k = k 
+        if pretrained:
+            self._load(pretrained)
+        else:
+            self.n_v = visible_nodes
+            self.n_h = hidden_nodes
+            self.k = k 
+    
+            # Initialize random weights from uniform distribution (Xavier initialization)
+            limit = np.sqrt(6. / (self.n_v + self.n_h))
+            self.W = np.random.uniform(low=-limit, high=limit, size=(self.n_v, self.n_h))
+            self.a = np.random.uniform(low=-limit, high=limit, size=(self.n_v)) # np.zeros((1, visible_nodes))
+            self.b = np.random.uniform(low=-limit, high=limit, size=(self.n_h)) # np.zeros((1, hidden_nodes))
+    
+    def _load(self, filename:str):
+        """
+            Load the params from a pretrained model 
+        """
+        f = open(filename, 'rb')
+        tmp_dict = pickle.load(f)
+        f.close()          
 
+        self.__dict__.update(tmp_dict) 
+
+    def save(self, filename:str):
+        """
+            Save the model params
+        """
+        base, ext = os.path.splitext(filename)  # Separate name and extension
     
-        # Initialize random weights from uniform distribution (Xavier initialization)
-        limit = np.sqrt(6. / (self.n_v + self.n_h))
-        self.W = np.random.uniform(low=-limit, high=limit, size=(self.n_v, self.n_h))
-        self.a = np.random.uniform(low=-limit, high=limit, size=(self.n_v)) # np.zeros((1, visible_nodes))
-        self.b = np.random.uniform(low=-limit, high=limit, size=(self.n_h)) # np.zeros((1, hidden_nodes))
-    
+        # Check if the file exists
+        while os.path.exists(filename):
+            filename = f"{base}_({i}){ext}"
+            i += 1
+
+        f = open(filename, 'wb')
+        pickle.dump(self.__dict__, f, 2)
+        f.close()
+
     def _forward(self, V):
         """ 
             Fordward propagation:
@@ -124,6 +155,7 @@ class RBM(ABC):
         h_p, h, v_p_, v_  = self._gibbsampling(X)
         return v_
 
+
 class RBM_CD(RBM):
     def __init__(self, visible_nodes, hidden_nodes, k: int = 1) -> None:
        super().__init__(visible_nodes, hidden_nodes, k)
@@ -153,12 +185,13 @@ class RBM_CD(RBM):
         error = np.sum((v - v_)**2) / batch_size
         return error
    
-    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.01):
-       """
-            Train the RBM using Contrastive Divergence
-       """
-       for epoch in range(epochs):
-            train_error = 0.0
+    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.01, verbose = False) -> list:
+        """
+             Train the RBM using Contrastive Divergence
+        """
+        train_errors = []
+        for epoch in range(epochs):
+            t_error = 0.0
             train_num = X.shape[0]
             batches = list(gen_batches(train_num, batch_dim))
             for batch in batches:
@@ -166,11 +199,14 @@ class RBM_CD(RBM):
                 batch_size = batch.shape[0]
 
                 error = self._contrastive_divergence(batch, batch_size, lr)
-                train_error += error
+                t_error += error
             
-            train_error /= len(batches)
-            print(f"epoch: {epoch}/{epochs} \t{'error:'} {train_error}")
-
+            t_error /= len(batches)
+            train_errors.append(t_error)
+            if verbose:
+                print(f"epoch: {epoch}/{epochs} \t{'error:'} {t_error}")
+        
+        return train_errors
 
 class RBM_PCD(RBM):
     def __init__(self, visible_nodes, hidden_nodes, batch_size = 32, k: int = 2) -> None:
@@ -205,14 +241,15 @@ class RBM_PCD(RBM):
         error = np.sum((v - self.visible_persistent)**2) / batch_size
         return error
 
-    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.1, weight_decay = 0.001):
+    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.1, weight_decay = 0.001, verbose = False) -> list:
         """
             Train the RBM using Persistent Contrastive Divergence
         """
         self.current_step = 0 # lr linear decay
 
+        train_errors = []
         for epoch in range(epochs):
-            train_error = 0.0
+            t_error = 0.0
             train_num = X.shape[0]
             batches = list(gen_batches(train_num, batch_dim))
             for batch in batches:
@@ -227,8 +264,11 @@ class RBM_PCD(RBM):
                 # learning_rate = lr *(1 - self.current_step / (batch_size * len(batches) * epochs))
                 # self.current_step += 1
 
-                error = self._persistent_contrastive_divergence(batch, batch_size, learning_rate, weight_decay)
-                train_error += error
+                t_error += self._persistent_contrastive_divergence(batch, batch_size, learning_rate, weight_decay)
            
-            train_error /= len(batches)
-            print(f"epoch: {epoch}/{epochs} \t{'error:'} {train_error}")
+            t_error /= len(batches)
+            train_errors.append(t_error)
+            
+            if verbose:
+                print(f"epoch: {epoch}/{epochs} \t{'error:'} {t_error}")
+        return train_errors
