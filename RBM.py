@@ -157,8 +157,8 @@ class RBM(ABC):
 
 
 class RBM_CD(RBM):
-    def __init__(self, visible_nodes, hidden_nodes, k: int = 1) -> None:
-       super().__init__(visible_nodes, hidden_nodes, k)
+    def __init__(self, visible_nodes, hidden_nodes, k: int = 1, pretrained: str = None) -> None:
+       super().__init__(visible_nodes, hidden_nodes, k, pretrained)
     
     def _contrastive_divergence(self, batch, batch_size, lr):  
         """
@@ -209,8 +209,8 @@ class RBM_CD(RBM):
         return train_errors
 
 class RBM_PCD(RBM):
-    def __init__(self, visible_nodes, hidden_nodes, batch_size = 32, k: int = 2) -> None:
-        super().__init__(visible_nodes, hidden_nodes, k)
+    def __init__(self, visible_nodes, hidden_nodes, batch_size = 32, k: int = 2, pretrained: str = None) -> None:
+        super().__init__(visible_nodes, hidden_nodes, k, pretrained)
         self.current_step = 0 # For learning rate decay
 
         # Initialize the visible persistent values
@@ -272,3 +272,54 @@ class RBM_PCD(RBM):
             if verbose:
                 print(f"epoch: {epoch}/{epochs} \t{'error:'} {t_error}")
         return train_errors
+
+class MNIST_RBM_CD(RBM_CD):
+    num_labels = 10
+    def __init__(self, visible_nodes, hidden_nodes, k: int = 1, pretrained: str = None) -> None:
+        super().__init__(visible_nodes + self.num_labels, hidden_nodes, k, pretrained)
+
+    def fit(self, X, Y, epochs=10, batch_dim=32, lr=0.01, verbose=False) -> list:
+        """
+            Train a RBM using the Contrastive Divergence algorithm for generating MNIST
+            images with a given label.
+
+            X: image data (N, d) where d is 32x32
+            Y: label data (N, 1) it goes [0, 9]
+
+            The key is to encode the Y labels as binary and add to each instance of X
+        """
+
+        # One-Hot encoding for the Y labels
+        encoded = np.zeros((Y.size, self.num_labels))
+        encoded[np.arange(Y.size), Y] = 1
+        
+        # Add the encoded matrix to the image data matrix
+        X = np.concatenate((X, encoded), axis=1)
+
+        # Train the RBM and return the train loss
+        return super().fit(X, epochs, batch_dim, lr, verbose)
+    
+    def generate_MNIST_image(self, number: int):
+        """
+            One-hot encoding for the number and
+            0s for the image data input.
+
+            The expected output is the generated image 
+        """
+        assert number >= 0 and number <= 9
+        
+        # Create random binary image with prob 0.5 
+        #X = np.random.binomial(1, 0.5, size=(1, self.n_v - self.num_labels))
+        X = np.zeros((1, self.n_v - self.num_labels))
+        encoded = np.zeros((1, self.num_labels))
+        encoded[0, number] = 1
+        X = np.concatenate((X, encoded), axis=1)
+
+        # Reconstruct the image
+        # aux = self.k
+        # self.k = 1 # let it "dream"
+        x_ = self.reconstruct(X)
+        # self.k = aux
+
+        # Remove the label
+        return x_[:, :-self.num_labels]

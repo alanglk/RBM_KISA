@@ -352,10 +352,51 @@ def test_RBM_PCD_MNIST_Reconstruction():
     print("===================================")
     print()
 
+
+def test_RBM_load_model():
+    np.random.seed(42) # For reproducibility
+    dataset_test        = MNIST("./data/t10k-images-idx3-ubyte.gz", "./data/t10k-labels-idx1-ubyte.gz")
+    X_test, Y_test      = dataset_test.to_numpy()
+    
+    print("RBM LOAD FROM PRETRAINED TEST") 
+    model_path = "./models/RBM_CD_e100_bt64_lr0.1_hn30_k1.pt"
+    rbm = RBM_CD(None, None, pretrained= model_path)
+
+    # reconstruction
+    digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]
+    resticted_set = X_test[digit_indices]
+
+    reconstructed = rbm.reconstruct(resticted_set)
+
+    # show 10 sample images
+    rows = 2
+    columns = 10
+    fig, axes = plt.subplots(rows, columns,sharey = True,figsize=(30, 6))
+    for i in range(rows):
+        for j in range(columns):
+            if i==0:
+              axes[i, j].imshow(resticted_set[j].reshape(28, 28))
+            else:
+              axes[i, j].imshow(reconstructed[j].reshape(28, 28))
+
+            axes[i, j].tick_params(left = False, right = False , labelleft = False,
+                    labelbottom = False, bottom = False)
+
+    axes[0, 0].set_ylabel("ACTUAL", fontsize=12)
+    axes[1, 0].set_ylabel("REC.", fontsize=12)
+    plt.show()
+
+    print("===================================")
+    print()
+
+
+
+
 if __name__ == "__main__":
     # test_RBM_BASE()
     # test_RBM_CD()
     # # test_RBM_CD_function() # Doesn't work
     # test_RBM_CD_XOR()
-    test_RBM_CD_MNIST_Reconstruction()
-    #test_RBM_PCD_MNIST_Reconstruction()
+    # test_RBM_CD_MNIST_Reconstruction()
+    test_RBM_PCD_MNIST_Reconstruction()
+    # test_RBM_load_model()
