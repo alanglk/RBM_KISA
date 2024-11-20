@@ -296,7 +296,7 @@ def test_RBM_PCD_MNIST_Reconstruction():
     # Hyperparameters
     test_size     = 0.1
     batch_size    = 64
-    learning_rate = 0.01
+    learning_rate = 0.1
     hidden_nodes  = 30    # Number of visible nodes are the input shape
     epochs        = 100    # Number of epochs
     
@@ -306,16 +306,16 @@ def test_RBM_PCD_MNIST_Reconstruction():
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=42, stratify=Y)
 
     # Initialize RBM with 30 hidden units
-    rbm = RBM_PCD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes, k= 2)
+    rbm = RBM_PCD(visible_nodes=X_train.shape[1], hidden_nodes=hidden_nodes, batch_size=batch_size, k= 2)
 
     # Test
-    print("RBM CD MNIST RECONSTRUCTION TEST")
+    print("RBM PCD MNIST RECONSTRUCTION TEST")
     print(f"Hyperparameters:")
     print(f"\tX_train instances: {X_train.shape[0]}\tX_test instances: {X_test.shape[0]}")
     print(f"\tbatch size: {batch_size}\tepochs: {epochs}\tlearning rate: {learning_rate}")
     print(f"\tvisible nodes: {X_train.shape[1]}\thidden nodes:{hidden_nodes}")
     print(f"Training:")
-    rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate, weight_decay=1)
+    rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate)
 
     # reconstruction
     digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]

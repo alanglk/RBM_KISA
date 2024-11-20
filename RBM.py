@@ -173,12 +173,12 @@ class RBM_CD(RBM):
 
 
 class RBM_PCD(RBM):
-    def __init__(self, visible_nodes, hidden_nodes, k: int = 2) -> None:
+    def __init__(self, visible_nodes, hidden_nodes, batch_size = 32, k: int = 2) -> None:
         super().__init__(visible_nodes, hidden_nodes, k)
         self.current_step = 0 # For learning rate decay
 
         # Initialize the visible persistent values
-        self.visible_persistent = np.random.binomial(1, 0.5, size=(1, self.n_v))  
+        self.visible_persistent = np.random.binomial(1, 0.5, size=(batch_size, self.n_v))  
     
     def _persistent_contrastive_divergence(self, batch, batch_size, lr, weight_decay):
         """
@@ -205,7 +205,7 @@ class RBM_PCD(RBM):
         error = np.sum((v - self.visible_persistent)**2) / batch_size
         return error
 
-    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.01, weight_decay = 0.0001):
+    def fit(self, X, epochs = 10, batch_dim = 32, lr = 0.1, weight_decay = 0.001):
         """
             Train the RBM using Persistent Contrastive Divergence
         """
@@ -219,9 +219,12 @@ class RBM_PCD(RBM):
                 batch = X[batch.start:batch.stop]
                 batch_size = batch.shape[0]
                 
+                if batch_size != batch_dim:
+                    continue # skip
+
                 # Linear learning rate decay
                 learning_rate = lr
-                # learning_rate = lr *(1 - self.current_step / batch_size * epochs)
+                # learning_rate = lr *(1 - self.current_step / (batch_size * len(batches) * epochs))
                 # self.current_step += 1
 
                 error = self._persistent_contrastive_divergence(batch, batch_size, learning_rate, weight_decay)
