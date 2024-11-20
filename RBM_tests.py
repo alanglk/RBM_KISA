@@ -315,7 +315,7 @@ def test_RBM_PCD_MNIST_Reconstruction():
     print(f"\tbatch size: {batch_size}\tepochs: {epochs}\tlearning rate: {learning_rate}")
     print(f"\tvisible nodes: {X_train.shape[1]}\thidden nodes:{hidden_nodes}")
     print(f"Training:")
-    rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate, weight_decay=None)
+    rbm.fit(X_train, epochs=epochs, batch_dim=batch_size, lr=learning_rate, weight_decay=1)
 
     # reconstruction
     digit_indices = [np.where(Y_test == i)[0][0] for i in range(10)]
@@ -350,6 +350,5 @@ if __name__ == "__main__":
     # test_RBM_CD()
     # # test_RBM_CD_function() # Doesn't work
     # test_RBM_CD_XOR()
-    # test_RBM_CD_MNIST_Reconstruction()
-
+    #test_RBM_CD_MNIST_Reconstruction()
     test_RBM_PCD_MNIST_Reconstruction()

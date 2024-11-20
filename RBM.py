@@ -47,6 +47,7 @@ class RBM(ABC):
         self.n_h = hidden_nodes
         self.k = k 
 
+    
         # Initialize random weights from uniform distribution (Xavier initialization)
         limit = np.sqrt(6. / (self.n_v + self.n_h))
         self.W = np.random.uniform(low=-limit, high=limit, size=(self.n_v, self.n_h))
@@ -171,14 +172,13 @@ class RBM_CD(RBM):
             print(f"epoch: {epoch}/{epochs} \t{'error:'} {train_error}")
 
 
-
 class RBM_PCD(RBM):
     def __init__(self, visible_nodes, hidden_nodes, k: int = 2) -> None:
         super().__init__(visible_nodes, hidden_nodes, k)
         self.current_step = 0 # For learning rate decay
 
         # Initialize the visible persistent values
-        self.visible_persistent = np.random.uniform(low=0, high=1, size=(1, self.n_v))   
+        self.visible_persistent = np.random.binomial(1, 0.5, size=(1, self.n_v))  
     
     def _persistent_contrastive_divergence(self, batch, batch_size, lr, weight_decay):
         """
@@ -196,7 +196,7 @@ class RBM_PCD(RBM):
         negative_association = np.dot(v_persistent_.T, h_p_persistent_)
         
         # Update the parameters
-        self.W += lr * (possitive_association - negative_association) / batch_size # - weight_decay * self.W / batch_size
+        self.W += lr * (possitive_association - negative_association) / batch_size  - weight_decay * self.W / batch_size
         self.a += lr * np.mean(v - v_persistent_, axis=0)
         self.b += lr * np.mean(h_p - h_p_persistent_, axis=0)
         self.visible_persistent = v_persistent_
